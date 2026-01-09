@@ -1,113 +1,163 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { MessageCircle, Shield, Users, Lock } from "lucide-react";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <div className="flex min-h-screen flex-col">
+      {/* Header */}
+      <header className="border-b">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-6 w-6" />
+            <span className="text-xl font-bold">Claud Friend</span>
+          </div>
+          <nav className="flex items-center gap-4">
+            <Link href="/login">
+              <Button variant="ghost">Login</Button>
+            </Link>
+            <Link href="/signup">
+              <Button>Sign Up</Button>
+            </Link>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+      {/* Hero Section */}
+      <section className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
+        <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+          A Safe Space to Be Heard
+        </h1>
+        <p className="mb-8 max-w-2xl text-lg text-muted-foreground sm:text-xl">
+          Connect with compassionate listeners in a confidential video chat
+          environment. Share your thoughts anonymously through our unique
+          confessional filter.
+        </p>
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <Link href="/signup?role=talker">
+            <Button size="lg" className="w-full sm:w-auto">
+              I Want to Talk
+            </Button>
+          </Link>
+          <Link href="/signup?role=listener">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto">
+              I Want to Listen
+            </Button>
+          </Link>
+        </div>
+      </section>
 
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
+      {/* Features Section */}
+      <section className="border-t bg-muted/50 px-4 py-16">
+        <div className="container mx-auto">
+          <h2 className="mb-12 text-center text-3xl font-bold">How It Works</h2>
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <Shield className="mb-2 h-10 w-10 text-primary" />
+                <CardTitle>Anonymous & Safe</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Our confessional filter conceals your identity while still
+                  showing you&apos;re present. Share without fear.
+                </CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Users className="mb-2 h-10 w-10 text-primary" />
+                <CardTitle>Verified Listeners</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Connect with rated listeners who are genuinely here to help.
+                  See their ratings before you connect.
+                </CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Lock className="mb-2 h-10 w-10 text-primary" />
+                <CardTitle>Private Connections</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  All calls are peer-to-peer encrypted. No recordings, no
+                  storage. Your conversation stays between you.
+                </CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <MessageCircle className="mb-2 h-10 w-10 text-primary" />
+                <CardTitle>Real-Time Video</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Face-to-face connections help build trust and understanding.
+                  Camera and mic required for authentic interaction.
+                </CardDescription>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="px-4 py-16">
+        <div className="container mx-auto text-center">
+          <h2 className="mb-4 text-3xl font-bold">Ready to Connect?</h2>
+          <p className="mb-8 text-muted-foreground">
+            Join our community of talkers and listeners today.
           </p>
-        </a>
+          <Link href="/signup">
+            <Button size="lg">Get Started Free</Button>
+          </Link>
+        </div>
+      </section>
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      {/* Footer */}
+      <footer className="border-t py-8">
+        <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            <span>Claud Friend</span>
+          </div>
+          <nav className="flex gap-4">
+            <Link href="/terms" className="hover:underline">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:underline">
+              Privacy
+            </Link>
+            <Link href="/report-abuse" className="hover:underline">
+              Report Abuse
+            </Link>
+          </nav>
+        </div>
+      </footer>
+    </div>
   );
 }
