@@ -11,7 +11,7 @@ interface ConfessionalVideoProps {
   isLocal?: boolean;
 }
 
-// Apply confession booth effect: Black & white with grain, vignette, mesh grille
+// Apply confessional effect: pixelation + blur + grille overlay
 function applyConfessionalEffect(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
@@ -27,66 +27,59 @@ function applyConfessionalEffect(
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // Convert to black and white with slight contrast boost
-  for (let i = 0; i < data.length; i += 4) {
-    // Calculate luminance (weighted for human perception)
-    const luminance = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+  // Apply pixelation - this obscures facial details
+  const pixelSize = 8;
+  for (let y = 0; y < height; y += pixelSize) {
+    for (let x = 0; x < width; x += pixelSize) {
+      // Get the color of the top-left pixel in this block
+      const i = (y * width + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
 
-    // Apply slight contrast curve
-    let adjusted = luminance / 255;
-    adjusted = adjusted < 0.5
-      ? 2 * adjusted * adjusted
-      : 1 - 2 * (1 - adjusted) * (1 - adjusted);
-    const gray = Math.max(0, Math.min(255, adjusted * 255));
-
-    // Pure black and white
-    data[i] = gray;     // R
-    data[i + 1] = gray; // G
-    data[i + 2] = gray; // B
-
-    // Add film grain noise
-    const noise = (Math.random() - 0.5) * 25;
-    data[i] = Math.max(0, Math.min(255, data[i] + noise));
-    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
-    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+      // Fill the entire block with this color
+      for (let py = 0; py < pixelSize && y + py < height; py++) {
+        for (let px = 0; px < pixelSize && x + px < width; px++) {
+          const pi = ((y + py) * width + (x + px)) * 4;
+          data[pi] = r;
+          data[pi + 1] = g;
+          data[pi + 2] = b;
+        }
+      }
+    }
   }
 
-  // Put the processed image back
+  // Put the pixelated image back
   ctx.putImageData(imageData, 0, 0);
 
-  // Apply slight blur for dreamy/mysterious effect
-  ctx.filter = "blur(1.5px)";
-  ctx.globalAlpha = 0.4;
+  // Apply blur effect
+  ctx.filter = "blur(3px)";
+  ctx.globalAlpha = 0.7;
   ctx.drawImage(canvas, 0, 0);
   ctx.filter = "none";
   ctx.globalAlpha = 1;
 
-  // Vignette effect (dark corners like peering through a confessional screen)
-  const gradient = ctx.createRadialGradient(
-    width / 2,
-    height / 2,
-    height * 0.2,
-    width / 2,
-    height / 2,
-    height * 0.8
-  );
-  gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-  gradient.addColorStop(0.5, "rgba(0, 0, 0, 0.2)");
-  gradient.addColorStop(1, "rgba(0, 0, 0, 0.7)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  // Apply diamond lattice mesh overlay (like a confessional screen)
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.lineWidth = 2;
 
-  // Confession booth mesh/grille overlay (horizontal slats)
-  ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
-  for (let y = 0; y < height; y += 6) {
-    ctx.fillRect(0, y, width, 2);
-  }
+  const spacing = 20; // Size of diamond pattern
 
-  // Add subtle vertical lines for cross-hatch mesh effect
-  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
-  for (let x = 0; x < width; x += 8) {
-    ctx.fillRect(x, 0, 1, height);
+  // Draw diagonal lines from top-left to bottom-right
+  ctx.beginPath();
+  for (let i = -height; i < width + height; i += spacing) {
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + height, height);
   }
+  ctx.stroke();
+
+  // Draw diagonal lines from top-right to bottom-left
+  ctx.beginPath();
+  for (let i = -height; i < width + height; i += spacing) {
+    ctx.moveTo(i, height);
+    ctx.lineTo(i + height, 0);
+  }
+  ctx.stroke();
 }
 
 export function ConfessionalVideo({
