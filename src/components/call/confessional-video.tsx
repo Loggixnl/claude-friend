@@ -11,7 +11,7 @@ interface ConfessionalVideoProps {
   isLocal?: boolean;
 }
 
-// Apply confessional effect: blur + pixelation + vignette + grille overlay
+// Apply confession booth effect: B&W, high contrast, grain, vignette, mesh grille
 function applyConfessionalEffect(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
@@ -27,56 +27,66 @@ function applyConfessionalEffect(
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // Apply pixelation
-  const pixelSize = 8;
-  for (let y = 0; y < height; y += pixelSize) {
-    for (let x = 0; x < width; x += pixelSize) {
-      // Get the color of the top-left pixel in this block
-      const i = (y * width + x) * 4;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
+  // Convert to high-contrast black and white with slight warmth
+  for (let i = 0; i < data.length; i += 4) {
+    // Calculate luminance (weighted for human perception)
+    const luminance = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
 
-      // Fill the entire block with this color
-      for (let py = 0; py < pixelSize && y + py < height; py++) {
-        for (let px = 0; px < pixelSize && x + px < width; px++) {
-          const pi = ((y + py) * width + (x + px)) * 4;
-          data[pi] = r;
-          data[pi + 1] = g;
-          data[pi + 2] = b;
-        }
-      }
-    }
+    // Apply contrast curve (S-curve for dramatic effect)
+    let adjusted = luminance / 255;
+    adjusted = adjusted < 0.5
+      ? 2 * adjusted * adjusted
+      : 1 - 2 * (1 - adjusted) * (1 - adjusted);
+    adjusted = Math.max(0, Math.min(1, adjusted * 1.2 - 0.1)); // Boost contrast
+
+    // Add slight sepia/warm tone for old confession booth feel
+    const gray = adjusted * 255;
+    data[i] = Math.min(255, gray * 1.05);     // R - slightly warm
+    data[i + 1] = gray;                        // G
+    data[i + 2] = Math.max(0, gray * 0.92);   // B - reduce blue
+
+    // Add film grain noise
+    const noise = (Math.random() - 0.5) * 25;
+    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
   }
 
-  // Put the pixelated image back
+  // Put the processed image back
   ctx.putImageData(imageData, 0, 0);
 
-  // Apply blur effect
-  ctx.filter = "blur(3px)";
-  ctx.globalAlpha = 0.7;
+  // Apply slight blur for dreamy/mysterious effect
+  ctx.filter = "blur(1.5px)";
+  ctx.globalAlpha = 0.4;
   ctx.drawImage(canvas, 0, 0);
   ctx.filter = "none";
   ctx.globalAlpha = 1;
 
-  // Apply vignette effect
+  // Heavy vignette effect (dark corners like peering through a confessional screen)
   const gradient = ctx.createRadialGradient(
     width / 2,
     height / 2,
-    height * 0.3,
+    height * 0.15,
     width / 2,
     height / 2,
-    height * 0.8
+    height * 0.7
   );
   gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-  gradient.addColorStop(1, "rgba(0, 0, 0, 0.6)");
+  gradient.addColorStop(0.5, "rgba(0, 0, 0, 0.3)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0.85)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  // Apply vertical grille/mesh overlay
-  ctx.fillStyle = "rgba(0, 0, 0, 0.03)";
-  for (let y = 0; y < height; y += 4) {
+  // Confession booth mesh/grille overlay (horizontal slats)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+  for (let y = 0; y < height; y += 6) {
     ctx.fillRect(0, y, width, 2);
+  }
+
+  // Add subtle vertical lines for cross-hatch mesh effect
+  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+  for (let x = 0; x < width; x += 8) {
+    ctx.fillRect(x, 0, 1, height);
   }
 }
 
