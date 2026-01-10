@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard/header";
+import { IdleTimeoutProvider } from "@/components/providers/idle-timeout-provider";
 
 export default async function ProtectedLayout({
   children,
@@ -32,9 +33,11 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <DashboardHeader profile={profile} />
-      <main className="flex-1">{children}</main>
-    </div>
+    <IdleTimeoutProvider>
+      <div className="flex min-h-screen flex-col">
+        <DashboardHeader profile={profile} />
+        <main className="flex-1">{children}</main>
+      </div>
+    </IdleTimeoutProvider>
   );
 }

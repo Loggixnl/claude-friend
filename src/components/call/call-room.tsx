@@ -11,6 +11,7 @@ import { RatingDialog } from "./rating-dialog";
 import { CameraRequiredWarning } from "./camera-required-warning";
 import { useToast } from "@/hooks/use-toast";
 import { Spinner } from "@/components/ui/spinner";
+import { safeError } from "@/lib/security";
 
 interface CallRoomProps {
   requestId: string;
@@ -83,10 +84,10 @@ export function CallRoom({
 
   const handleError = useCallback(
     (error: Error) => {
-      console.error("WebRTC error:", error);
+      safeError("WebRTC error:", error);
       toast({
         title: "Connection error",
-        description: error.message,
+        description: "A connection error occurred. Please try again.",
         variant: "destructive",
       });
     },
@@ -155,7 +156,7 @@ export function CallRoom({
 
   if (!isMediaReady) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-black">
         <Spinner size="lg" />
         <p className="text-muted-foreground">Setting up your camera and microphone...</p>
       </div>
@@ -163,18 +164,18 @@ export function CallRoom({
   }
 
   return (
-    <div className="flex h-screen flex-col bg-black">
-      {/* Video Grid */}
-      <div className="relative flex-1">
+    <div className="fixed inset-0 flex flex-col bg-black p-[2.5%] sm:p-[5%]">
+      {/* Video Grid - constrained to available space */}
+      <div className="relative flex-1 min-h-0 overflow-hidden rounded-lg">
         {/* Remote Video (main) */}
         <ConfessionalVideo
           stream={remoteStream}
-          className="h-full w-full"
+          className="absolute inset-0"
           label={otherUsername}
         />
 
         {/* Local Video (picture-in-picture) */}
-        <div className="absolute bottom-4 right-4 h-32 w-48 overflow-hidden rounded-lg border-2 border-white/20 shadow-lg sm:h-40 sm:w-56">
+        <div className="absolute bottom-4 right-4 h-24 w-36 overflow-hidden rounded-lg border-2 border-white/20 shadow-lg sm:h-32 sm:w-48 md:h-40 md:w-56">
           <ConfessionalVideo
             stream={localStream}
             isLocal

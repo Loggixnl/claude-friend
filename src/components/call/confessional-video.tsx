@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { safeError } from "@/lib/security";
 
 interface ConfessionalVideoProps {
   stream: MediaStream | null;
@@ -105,7 +106,7 @@ export function ConfessionalVideo({
         await video.play();
         setIsPlaying(true);
       } catch (err) {
-        console.error("Failed to play video:", err);
+        safeError("Failed to play video:", err);
       }
     };
 
@@ -158,7 +159,7 @@ export function ConfessionalVideo({
       {/* Canvas with confessional effect */}
       <canvas
         ref={canvasRef}
-        className="h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover"
       />
 
       {/* CSS overlay for additional effect */}

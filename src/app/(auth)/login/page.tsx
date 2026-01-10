@@ -18,6 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Spinner } from "@/components/ui/spinner";
 import { loginSchema, type LoginFormData } from "@/lib/validations";
+import { isRateLimited } from "@/lib/security";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -55,6 +56,18 @@ export default function LoginPage() {
       return;
     }
 
+    // Rate limit: 5 login attempts per 15 minutes per email
+    const rateLimitKey = `login:${formData.email.toLowerCase()}`;
+    if (isRateLimited(rateLimitKey, { maxRequests: 5, windowMs: 900000 })) {
+      toast({
+        title: "Too many login attempts",
+        description: "Please wait 15 minutes before trying again.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({
       email: formData.email,
@@ -62,6 +75,8 @@ export default function LoginPage() {
     });
 
     if (error) {
+      // Use generic error message to prevent user enumeration
+      // Only differentiate for email confirmation to help legitimate users
       if (error.message.includes("Email not confirmed")) {
         setEmail(formData.email);
         setShowResend(true);
@@ -72,9 +87,10 @@ export default function LoginPage() {
           variant: "destructive",
         });
       } else {
+        // Generic message for all other errors (invalid credentials, user not found, etc.)
         toast({
           title: "Login failed",
-          description: error.message,
+          description: "Invalid email or password. Please try again.",
           variant: "destructive",
         });
       }

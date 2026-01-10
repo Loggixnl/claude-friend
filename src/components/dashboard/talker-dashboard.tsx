@@ -43,10 +43,12 @@ export function TalkerDashboard({ userId }: TalkerDashboardProps) {
       return;
     }
 
-    // Fetch listener presence
+    // Fetch listener presence - only for non-banned listeners we're displaying
+    const listenerIds = (profiles || []).map((p) => p.id);
     const { data: presenceData } = await supabase
       .from("listener_presence")
-      .select("*");
+      .select("*")
+      .in("user_id", listenerIds);
 
     const presenceMap = new Map(
       presenceData?.map((p) => [p.user_id, p]) || []

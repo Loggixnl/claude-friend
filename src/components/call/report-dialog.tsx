@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { isRateLimited, getRateLimitRemaining } from "@/lib/security";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +73,19 @@ export function ReportDialog({
       toast({
         title: "Authentication error",
         description: "Please log in again.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    // Rate limit: 3 reports per hour per user
+    const rateLimitKey = `report:${user.id}`;
+    if (isRateLimited(rateLimitKey, { maxRequests: 3, windowMs: 3600000 })) {
+      const remaining = getRateLimitRemaining(rateLimitKey, { maxRequests: 3, windowMs: 3600000 });
+      toast({
+        title: "Rate limit exceeded",
+        description: `You can only submit 3 reports per hour. ${remaining} remaining.`,
         variant: "destructive",
       });
       setIsLoading(false);

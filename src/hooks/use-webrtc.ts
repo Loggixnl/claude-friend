@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import {
+  generateSignalSignature,
+  verifySignalSignature,
+  safeError,
+} from "@/lib/security";
 
 interface UseWebRTCOptions {
   requestId: string;
@@ -84,7 +89,7 @@ export function useWebRTC({
         });
         await new Promise((r) => setTimeout(r, 100));
       } catch (e) {
-        console.error("Error sending hangup:", e);
+        safeError("Error sending hangup:", e);
       }
     }
 
@@ -132,19 +137,41 @@ export function useWebRTC({
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        const timestamp = Date.now();
+        const signature = generateSignalSignature(userId, requestId, timestamp);
         channelRef.current?.send({
           type: "broadcast",
           event: "webrtc_signal",
-          payload: { type: "offer", sdp: offer, from: userId },
+          payload: { type: "offer", sdp: offer, from: userId, timestamp, signature },
         });
       } catch (error) {
-        console.error("Error creating offer:", error);
+        safeError("Error creating offer:", error);
         onErrorRef.current?.(error as Error);
       }
     };
 
-    const handleSignal = async (data: { type: string; sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit; from: string }) => {
+    const handleSignal = async (data: {
+      type: string;
+      sdp?: RTCSessionDescriptionInit;
+      candidate?: RTCIceCandidateInit;
+      from: string;
+      timestamp?: number;
+      signature?: string;
+    }) => {
       if (data.from === userId || isCleanedUpRef.current) return;
+
+      // Verify signature for offer/answer/ice_candidate messages
+      if (
+        data.type !== "ready" &&
+        data.type !== "hangup" &&
+        data.timestamp &&
+        data.signature
+      ) {
+        if (!verifySignalSignature(data.from, requestId, data.timestamp, data.signature)) {
+          safeError("Invalid signal signature, ignoring message");
+          return;
+        }
+      }
 
       const pc = peerConnectionRef.current;
 
@@ -166,10 +193,12 @@ export function useWebRTC({
 
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
+          const answerTimestamp = Date.now();
+          const answerSignature = generateSignalSignature(userId, requestId, answerTimestamp);
           channelRef.current?.send({
             type: "broadcast",
             event: "webrtc_signal",
-            payload: { type: "answer", sdp: answer, from: userId },
+            payload: { type: "answer", sdp: answer, from: userId, timestamp: answerTimestamp, signature: answerSignature },
           });
         } else if (data.type === "answer" && pc && pc.signalingState !== "closed") {
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp!));
@@ -196,7 +225,7 @@ export function useWebRTC({
           onHangupRef.current?.();
         }
       } catch (error) {
-        console.error("Signal handling error:", error);
+        safeError("Signal handling error:", error);
         onErrorRef.current?.(error as Error);
       }
     };
@@ -229,10 +258,18 @@ export function useWebRTC({
 
         pc.onicecandidate = (event) => {
           if (event.candidate && channelRef.current) {
+            const iceTimestamp = Date.now();
+            const iceSignature = generateSignalSignature(userId, requestId, iceTimestamp);
             channelRef.current.send({
               type: "broadcast",
               event: "webrtc_signal",
-              payload: { type: "ice_candidate", candidate: event.candidate.toJSON(), from: userId },
+              payload: {
+                type: "ice_candidate",
+                candidate: event.candidate.toJSON(),
+                from: userId,
+                timestamp: iceTimestamp,
+                signature: iceSignature,
+              },
             });
           }
         };
@@ -271,7 +308,7 @@ export function useWebRTC({
           });
 
       } catch (error) {
-        console.error("Setup error:", error);
+        safeError("Setup error:", error);
         onErrorRef.current?.(error as Error);
       }
     };
