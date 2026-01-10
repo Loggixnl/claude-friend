@@ -8,6 +8,7 @@ import { RingingDialog } from "./ringing-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { sortListeners } from "@/lib/sorting";
+import { CameraPreviewButton } from "./camera-preview";
 import type { ListenerWithProfile, CallRequest } from "@/lib/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -259,11 +260,14 @@ export function TalkerDashboard({ userId }: TalkerDashboardProps) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Find a Listener</h1>
-        <p className="text-muted-foreground">
-          Choose someone to share your thoughts with
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Find a Listener</h1>
+          <p className="text-muted-foreground">
+            Choose someone to share your thoughts with
+          </p>
+        </div>
+        <CameraPreviewButton />
       </div>
 
       {listeners.length === 0 ? (

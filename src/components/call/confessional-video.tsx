@@ -11,7 +11,8 @@ interface ConfessionalVideoProps {
   isLocal?: boolean;
 }
 
-// Apply confession booth effect: B&W, high contrast, grain, vignette, mesh grille
+// Apply anonymizing confession booth effect: heavy pixelation + silhouette
+// Designed so human form is visible but face is NOT recognizable
 function applyConfessionalEffect(
   ctx: CanvasRenderingContext2D,
   video: HTMLVideoElement,
@@ -20,74 +21,111 @@ function applyConfessionalEffect(
   const width = canvas.width;
   const height = canvas.height;
 
-  // Draw the video frame
-  ctx.drawImage(video, 0, 0, width, height);
+  // STEP 1: Draw video at very low resolution for pixelation effect
+  const pixelSize = 12; // Large pixels to destroy facial details
+  const smallWidth = Math.ceil(width / pixelSize);
+  const smallHeight = Math.ceil(height / pixelSize);
 
-  // Get image data
+  // Create temporary canvas for pixelation
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = smallWidth;
+  tempCanvas.height = smallHeight;
+  const tempCtx = tempCanvas.getContext("2d")!;
+
+  // Draw video to tiny size (this destroys detail)
+  tempCtx.drawImage(video, 0, 0, smallWidth, smallHeight);
+
+  // Draw back to main canvas with nearest-neighbor scaling (blocky pixels)
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tempCanvas, 0, 0, smallWidth, smallHeight, 0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+
+  // STEP 2: Get image data and apply extreme contrast + silhouette effect
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
-  // Convert to high-contrast black and white with slight warmth
   for (let i = 0; i < data.length; i += 4) {
-    // Calculate luminance (weighted for human perception)
+    // Calculate luminance
     const luminance = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
 
-    // Apply contrast curve (S-curve for dramatic effect)
-    let adjusted = luminance / 255;
-    adjusted = adjusted < 0.5
-      ? 2 * adjusted * adjusted
-      : 1 - 2 * (1 - adjusted) * (1 - adjusted);
-    adjusted = Math.max(0, Math.min(1, adjusted * 1.2 - 0.1)); // Boost contrast
+    // Extreme threshold to create near-silhouette (3 levels only: dark, mid, light)
+    let level: number;
+    if (luminance < 60) {
+      level = 20; // Very dark
+    } else if (luminance < 140) {
+      level = 80; // Dark mid-tone
+    } else {
+      level = 160; // Lighter areas (but still muted)
+    }
 
-    // Add slight sepia/warm tone for old confession booth feel
-    const gray = adjusted * 255;
-    data[i] = Math.min(255, gray * 1.05);     // R - slightly warm
-    data[i + 1] = gray;                        // G
-    data[i + 2] = Math.max(0, gray * 0.92);   // B - reduce blue
+    // Add heavy noise to further obscure
+    const noise = (Math.random() - 0.5) * 60;
+    const final = Math.max(0, Math.min(255, level + noise));
 
-    // Add film grain noise
-    const noise = (Math.random() - 0.5) * 25;
-    data[i] = Math.max(0, Math.min(255, data[i] + noise));
-    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
-    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+    // Warm/amber tint like looking through amber glass
+    data[i] = Math.min(255, final * 1.1);     // R - warm
+    data[i + 1] = Math.min(255, final * 0.9); // G - reduced
+    data[i + 2] = Math.max(0, final * 0.6);   // B - heavily reduced
   }
 
-  // Put the processed image back
   ctx.putImageData(imageData, 0, 0);
 
-  // Apply slight blur for dreamy/mysterious effect
-  ctx.filter = "blur(1.5px)";
-  ctx.globalAlpha = 0.4;
+  // STEP 3: Apply heavy blur to smear any remaining detail
+  ctx.filter = "blur(4px)";
+  ctx.globalAlpha = 0.7;
   ctx.drawImage(canvas, 0, 0);
   ctx.filter = "none";
   ctx.globalAlpha = 1;
 
-  // Heavy vignette effect (dark corners like peering through a confessional screen)
+  // Re-apply some contrast after blur
+  const blurredData = ctx.getImageData(0, 0, width, height);
+  const bd = blurredData.data;
+  for (let i = 0; i < bd.length; i += 4) {
+    // Boost contrast slightly
+    bd[i] = Math.min(255, Math.max(0, (bd[i] - 128) * 1.3 + 128));
+    bd[i + 1] = Math.min(255, Math.max(0, (bd[i + 1] - 128) * 1.3 + 128));
+    bd[i + 2] = Math.min(255, Math.max(0, (bd[i + 2] - 128) * 1.3 + 128));
+  }
+  ctx.putImageData(blurredData, 0, 0);
+
+  // STEP 4: Heavy vignette - very dark edges
   const gradient = ctx.createRadialGradient(
     width / 2,
     height / 2,
-    height * 0.15,
+    height * 0.1,
     width / 2,
     height / 2,
-    height * 0.7
+    height * 0.55
   );
   gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-  gradient.addColorStop(0.5, "rgba(0, 0, 0, 0.3)");
-  gradient.addColorStop(1, "rgba(0, 0, 0, 0.85)");
+  gradient.addColorStop(0.4, "rgba(0, 0, 0, 0.4)");
+  gradient.addColorStop(0.7, "rgba(0, 0, 0, 0.7)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0.95)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  // Confession booth mesh/grille overlay (horizontal slats)
-  ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
-  for (let y = 0; y < height; y += 6) {
+  // STEP 5: Dense confession booth mesh grille (thick horizontal slats)
+  ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+  for (let y = 0; y < height; y += 4) {
     ctx.fillRect(0, y, width, 2);
   }
 
-  // Add subtle vertical lines for cross-hatch mesh effect
-  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
-  for (let x = 0; x < width; x += 8) {
-    ctx.fillRect(x, 0, 1, height);
+  // Vertical bars for cross-hatch pattern
+  ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+  for (let x = 0; x < width; x += 5) {
+    ctx.fillRect(x, 0, 2, height);
   }
+
+  // STEP 6: Additional random noise overlay for extra obscuring
+  const noiseData = ctx.getImageData(0, 0, width, height);
+  const nd = noiseData.data;
+  for (let i = 0; i < nd.length; i += 4) {
+    const flicker = (Math.random() - 0.5) * 30;
+    nd[i] = Math.max(0, Math.min(255, nd[i] + flicker));
+    nd[i + 1] = Math.max(0, Math.min(255, nd[i + 1] + flicker));
+    nd[i + 2] = Math.max(0, Math.min(255, nd[i + 2] + flicker));
+  }
+  ctx.putImageData(noiseData, 0, 0);
 }
 
 export function ConfessionalVideo({

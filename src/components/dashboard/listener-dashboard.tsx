@@ -18,6 +18,7 @@ import { IncomingCallDialog } from "./incoming-call-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getDenyWarning, isDenyDisabled } from "@/lib/sorting";
 import { Headphones, Clock } from "lucide-react";
+import { CameraPreviewButton } from "./camera-preview";
 import type { Profile, CallRequest, ListenerPresence } from "@/lib/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -345,11 +346,14 @@ export function ListenerDashboard({ userId, profile }: ListenerDashboardProps) {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Listener Dashboard</h1>
-        <p className="text-muted-foreground">
-          Help others by being available to listen
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Listener Dashboard</h1>
+          <p className="text-muted-foreground">
+            Help others by being available to listen
+          </p>
+        </div>
+        <CameraPreviewButton />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
