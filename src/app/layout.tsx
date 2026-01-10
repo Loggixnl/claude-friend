@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Claud Friend - Confessional Video Chat",
+  title: "Let me confess - Confessional Video Chat",
   description:
     "A safe, anonymous space to share and be heard. Connect with compassionate listeners in a confidential video chat environment.",
   keywords: ["confessional", "video chat", "anonymous", "listener", "support"],

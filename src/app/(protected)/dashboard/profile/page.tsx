@@ -12,7 +12,7 @@ import { getLanguageFlag, getLanguageName } from "@/lib/utils";
 import { User, Star, Flag, Calendar } from "lucide-react";
 
 export const metadata = {
-  title: "Profile - Claud Friend",
+  title: "Profile - Let me confess",
 };
 
 export default async function ProfilePage() {

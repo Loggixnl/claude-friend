@@ -1,6 +1,6 @@
 [project]
 id = "claud-friend"
-name = "Claud Friend"
+name = "Let me confess"
 
 [api]
 enabled = true

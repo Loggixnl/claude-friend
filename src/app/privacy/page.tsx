@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata = {
-  title: "Privacy Policy - Claud Friend",
+  title: "Privacy Policy - Let me confess",
 };
 
 export default function PrivacyPage() {

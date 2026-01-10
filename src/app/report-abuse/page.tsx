@@ -10,7 +10,7 @@ import {
 import { ArrowLeft, Shield, AlertTriangle, Flag } from "lucide-react";
 
 export const metadata = {
-  title: "Report Abuse - Claud Friend",
+  title: "Report Abuse - Let me confess",
 };
 
 export default function ReportAbusePage() {
@@ -35,7 +35,7 @@ export default function ReportAbusePage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Claud Friend is committed to maintaining a safe and supportive
+              Let me confess is committed to maintaining a safe and supportive
               environment for all users. We take all reports of abuse seriously
               and investigate each one thoroughly.
             </p>
@@ -142,7 +142,7 @@ export default function ReportAbusePage() {
           <CardContent>
             <p className="text-muted-foreground">
               If you or someone else is in immediate danger, please contact
-              emergency services in your area immediately. Claud Friend is not
+              emergency services in your area immediately. Let me confess is not
               equipped to handle emergency situations.
             </p>
           </CardContent>

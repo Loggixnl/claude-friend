@@ -13,7 +13,7 @@ export default function AuthLayout({
         className="mb-8 flex items-center gap-2 text-2xl font-bold"
       >
         <MessageCircle className="h-8 w-8" />
-        <span>Claud Friend</span>
+        <span>Let me confess</span>
       </Link>
       {children}
     </div>

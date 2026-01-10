@@ -1,4 +1,4 @@
-# Claud Friend - Confessional Video Chat Platform
+# Let me confess - Confessional Video Chat Platform
 
 A production-ready MVP for an online "confessional" video chat platform. Users connect as either Talkers (seeking to share) or Listeners (offering support), with a unique visual filter that provides anonymity while maintaining human connection.
 

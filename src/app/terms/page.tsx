@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata = {
-  title: "Terms of Service - Claud Friend",
+  title: "Terms of Service - Let me confess",
 };
 
 export default function TermsPage() {
@@ -25,13 +25,13 @@ export default function TermsPage() {
 
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By accessing and using Claud Friend, you accept and agree to be bound
+          By accessing and using Let me confess, you accept and agree to be bound
           by the terms and provision of this agreement.
         </p>
 
         <h2>2. Description of Service</h2>
         <p>
-          Claud Friend is a video chat platform that connects people who want to
+          Let me confess is a video chat platform that connects people who want to
           talk (Talkers) with people who want to listen (Listeners). The service
           includes a &quot;confessional filter&quot; that obscures video feeds to
           maintain anonymity.
@@ -64,7 +64,7 @@ export default function TermsPage() {
 
         <h2>6. Disclaimer</h2>
         <p>
-          Claud Friend is not a substitute for professional mental health
+          Let me confess is not a substitute for professional mental health
           services. If you are in crisis, please contact emergency services or a
           mental health professional.
         </p>

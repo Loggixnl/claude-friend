@@ -28,7 +28,7 @@ export default async function Home() {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <MessageCircle className="h-6 w-6" />
-            <span className="text-xl font-bold">Claud Friend</span>
+            <span className="text-xl font-bold">Let me confess</span>
           </div>
           <nav className="flex items-center gap-4">
             <Link href="/login">
@@ -143,7 +143,7 @@ export default async function Home() {
         <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:flex-row">
           <div className="flex items-center gap-2">
             <MessageCircle className="h-4 w-4" />
-            <span>Claud Friend</span>
+            <span>Let me confess</span>
           </div>
           <nav className="flex gap-4">
             <Link href="/terms" className="hover:underline">

@@ -26,6 +26,15 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
 
   const handleSignOut = async () => {
     const supabase = createClient();
+
+    // If user is a listener, set their presence to inactive before signing out
+    if (profile.role === "listener") {
+      await supabase
+        .from("listener_presence")
+        .update({ status: "inactive", activation_until: null })
+        .eq("user_id", profile.id);
+    }
+
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
@@ -36,7 +45,7 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link href="/dashboard" className="flex items-center gap-2">
           <MessageCircle className="h-6 w-6" />
-          <span className="text-xl font-bold">Claud Friend</span>
+          <span className="text-xl font-bold">Let me confess</span>
         </Link>
 
         <div className="flex items-center gap-4">
