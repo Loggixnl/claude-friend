@@ -16,7 +16,7 @@ interface UseWebRTCOptions {
 }
 
 interface WebRTCSignal {
-  type: "offer" | "answer" | "ice_candidate" | "hangup";
+  type: "offer" | "answer" | "ice_candidate" | "hangup" | "ready";
   payload: RTCSessionDescriptionInit | RTCIceCandidateInit | null;
   from: string;
 }
@@ -151,16 +151,45 @@ export function useWebRTC({
     }
   }, [onError]);
 
+  const otherReadyRef = useRef(false);
+  const localReadyRef = useRef(false);
+
+  const startCall = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc || !isTalker) return;
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendSignal({
+        type: "offer",
+        payload: offer,
+        from: userId,
+      });
+    } catch (error) {
+      onError?.(error as Error);
+    }
+  }, [isTalker, sendSignal, userId, onError]);
+
   const handleSignal = useCallback(
     async (signal: WebRTCSignal) => {
       if (signal.from === userId) return;
 
       const pc = peerConnectionRef.current;
-      if (!pc) return;
 
       try {
         switch (signal.type) {
+          case "ready":
+            // Other party is ready
+            otherReadyRef.current = true;
+            // If we're the talker and both are ready, start the call
+            if (isTalker && localReadyRef.current && otherReadyRef.current) {
+              startCall();
+            }
+            break;
+
           case "offer":
+            if (!pc) return;
             await pc.setRemoteDescription(
               new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit)
             );
@@ -181,6 +210,7 @@ export function useWebRTC({
             break;
 
           case "answer":
+            if (!pc) return;
             await pc.setRemoteDescription(
               new RTCSessionDescription(signal.payload as RTCSessionDescriptionInit)
             );
@@ -193,6 +223,7 @@ export function useWebRTC({
             break;
 
           case "ice_candidate":
+            if (!pc) return;
             if (pc.remoteDescription) {
               await pc.addIceCandidate(
                 new RTCIceCandidate(signal.payload as RTCIceCandidateInit)
@@ -203,6 +234,12 @@ export function useWebRTC({
             break;
 
           case "hangup":
+            // Clean up locally when receiving hangup from other party
+            localStream?.getTracks().forEach((track) => track.stop());
+            peerConnectionRef.current?.close();
+            setLocalStream(null);
+            setRemoteStream(null);
+            setConnectionState("closed");
             onHangup?.();
             break;
         }
@@ -211,15 +248,25 @@ export function useWebRTC({
         onError?.(error as Error);
       }
     },
-    [userId, sendSignal, onError, onHangup]
+    [userId, isTalker, sendSignal, startCall, onError, onHangup, localStream]
   );
 
-  const hangup = useCallback(() => {
-    sendSignal({
-      type: "hangup",
-      payload: null,
-      from: userId,
-    });
+  const hangup = useCallback(async () => {
+    // Send hangup signal first, before any cleanup
+    if (channelRef.current) {
+      await channelRef.current.send({
+        type: "broadcast",
+        event: "webrtc_signal",
+        payload: {
+          type: "hangup",
+          payload: null,
+          from: userId,
+        },
+      });
+
+      // Small delay to ensure signal is sent
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
 
     // Cleanup
     localStream?.getTracks().forEach((track) => track.stop());
@@ -231,7 +278,7 @@ export function useWebRTC({
     setConnectionState("closed");
 
     onHangup?.();
-  }, [localStream, userId, sendSignal, onHangup]);
+  }, [localStream, userId, onHangup]);
 
   const toggleMute = useCallback(() => {
     if (localStream) {
@@ -257,6 +304,7 @@ export function useWebRTC({
   useEffect(() => {
     const supabase = createClient();
     const channelName = `call:${requestId}`;
+    let isCleanedUp = false;
 
     const setup = async () => {
       // Create peer connection
@@ -264,7 +312,7 @@ export function useWebRTC({
 
       // Initialize media
       const stream = await initializeMedia();
-      if (!stream) return;
+      if (!stream || isCleanedUp) return;
 
       // Add tracks to peer connection
       stream.getTracks().forEach((track) => {
@@ -278,16 +326,21 @@ export function useWebRTC({
           handleSignal(payload as WebRTCSignal);
         })
         .subscribe((status) => {
-          if (status === "SUBSCRIBED" && isTalker) {
-            // Talker initiates the call after subscription
-            peerConnectionRef.current?.createOffer().then(async (offer) => {
-              await peerConnectionRef.current!.setLocalDescription(offer);
-              sendSignal({
-                type: "offer",
-                payload: offer,
-                from: userId,
-              });
+          if (status === "SUBSCRIBED" && !isCleanedUp) {
+            // Mark ourselves as ready
+            localReadyRef.current = true;
+
+            // Send ready signal to other party
+            sendSignal({
+              type: "ready",
+              payload: null,
+              from: userId,
             });
+
+            // If talker and other party is already ready, start call
+            if (isTalker && otherReadyRef.current) {
+              startCall();
+            }
           }
         });
     };
@@ -295,7 +348,7 @@ export function useWebRTC({
     setup();
 
     return () => {
-      localStream?.getTracks().forEach((track) => track.stop());
+      isCleanedUp = true;
       peerConnectionRef.current?.close();
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
@@ -309,6 +362,7 @@ export function useWebRTC({
     initializeMedia,
     handleSignal,
     sendSignal,
+    startCall,
   ]);
 
   return {
