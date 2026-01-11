@@ -114,6 +114,25 @@ export function CallRoom({
     onError: handleError,
   });
 
+  // Debug logging for streams
+  useEffect(() => {
+    console.log("[CallRoom] Stream states:", {
+      localStream: localStream ? {
+        id: localStream.id,
+        active: localStream.active,
+        videoTracks: localStream.getVideoTracks().length,
+        audioTracks: localStream.getAudioTracks().length,
+      } : null,
+      remoteStream: remoteStream ? {
+        id: remoteStream.id,
+        active: remoteStream.active,
+        videoTracks: remoteStream.getVideoTracks().length,
+        audioTracks: remoteStream.getAudioTracks().length,
+      } : null,
+      connectionState,
+    });
+  }, [localStream, remoteStream, connectionState]);
+
   // Handle camera disabled grace period
   useEffect(() => {
     if (isCameraOff && !cameraWarningTimeout) {

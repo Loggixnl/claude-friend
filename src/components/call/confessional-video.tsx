@@ -105,8 +105,15 @@ export function ConfessionalVideo({
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
+
+    console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] Stream changed:`, stream ? {
+      id: stream.id,
+      active: stream.active,
+      videoTracks: stream.getVideoTracks().map(t => ({ id: t.id, enabled: t.enabled, readyState: t.readyState })),
+      audioTracks: stream.getAudioTracks().length,
+    } : null);
 
     // Reset state when stream changes
     setIsVideoReady(false);
@@ -146,8 +153,11 @@ export function ConfessionalVideo({
       try {
         // Wait a tick to ensure srcObject is properly set
         await new Promise((r) => setTimeout(r, 50));
+        console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] Attempting to play video...`);
         await video.play();
+        console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] Video playing! readyState=${video.readyState}, videoWidth=${video.videoWidth}, videoHeight=${video.videoHeight}`);
       } catch (err) {
+        console.error(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] Failed to play video:`, err);
         safeError("Failed to play video:", err);
       }
     };
