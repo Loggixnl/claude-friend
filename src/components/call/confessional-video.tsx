@@ -92,108 +92,144 @@ export function ConfessionalVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hasVideo, setHasVideo] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  const isVideoReadyRef = useRef(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isVideoReadyRef.current = isVideoReady;
+  }, [isVideoReady]);
 
   useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
 
-    // Reset state when stream changes
-    setIsPlaying(false);
-    setHasVideo(false);
-
-    if (!stream) {
-      // Clear canvas when no stream
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-
-    video.srcObject = stream;
-    video.muted = muted || isLocal; // Always mute local to prevent feedback
-    video.playsInline = true;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Reset state when stream changes
+    setIsVideoReady(false);
+    isVideoReadyRef.current = false;
+
+    // Clear canvas and stop animation when no stream
+    if (!stream) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = undefined;
+      }
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width || 320, canvas.height || 240);
+      return;
+    }
+
+    // Set stream to video element
+    video.srcObject = stream;
+    video.muted = muted || isLocal; // Always mute local to prevent feedback
+
     // Resize canvas to match video dimensions
     const resizeCanvas = () => {
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (vw > 0 && vh > 0) {
         // Use smaller dimensions for performance
         const scale = 0.5;
-        canvas.width = video.videoWidth * scale;
-        canvas.height = video.videoHeight * scale;
-        setHasVideo(true);
+        canvas.width = vw * scale;
+        canvas.height = vh * scale;
+        return true;
       }
+      return false;
     };
 
+    // Try to play video
     const playVideo = async () => {
       try {
+        // Wait a tick to ensure srcObject is properly set
+        await new Promise((r) => setTimeout(r, 50));
         await video.play();
-        setIsPlaying(true);
-        // Resize after play starts in case dimensions weren't available before
-        resizeCanvas();
       } catch (err) {
         safeError("Failed to play video:", err);
       }
     };
 
-    // Handle video metadata loaded
-    const handleLoadedMetadata = () => {
-      resizeCanvas();
-      playVideo();
-    };
-
-    // Handle when video data is available
-    const handleLoadedData = () => {
-      resizeCanvas();
-    };
-
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("loadeddata", handleLoadedData);
-
-    // If video is already ready (e.g., stream was already playing), start immediately
-    if (video.readyState >= 1) {
-      handleLoadedMetadata();
-    } else {
-      // Try to play anyway for remote streams that might already be active
-      playVideo();
-    }
-
-    // Render loop
+    // Render loop - runs continuously once started
     const render = () => {
-      if (video.readyState >= video.HAVE_CURRENT_DATA && canvas.width > 0 && canvas.height > 0) {
-        applyConfessionalEffect(ctx, video, canvas);
+      // Check if video has valid data
+      if (video.readyState >= video.HAVE_CURRENT_DATA) {
+        // Try to resize canvas if not done yet
+        if (canvas.width === 0 || canvas.height === 0) {
+          resizeCanvas();
+        }
+
+        // Only render if canvas has valid dimensions
+        if (canvas.width > 0 && canvas.height > 0) {
+          // Check video dimensions again (might change)
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            const scale = 0.5;
+            const targetWidth = video.videoWidth * scale;
+            const targetHeight = video.videoHeight * scale;
+            if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+              canvas.width = targetWidth;
+              canvas.height = targetHeight;
+            }
+          }
+
+          applyConfessionalEffect(ctx, video, canvas);
+
+          // Mark as ready once we've successfully rendered (use ref to avoid re-renders in loop)
+          if (!isVideoReadyRef.current) {
+            isVideoReadyRef.current = true;
+            setIsVideoReady(true);
+          }
+        }
       }
       animationRef.current = requestAnimationFrame(render);
     };
 
+    // Handle video events
+    const handleCanPlay = () => {
+      resizeCanvas();
+    };
+
+    const handlePlaying = () => {
+      resizeCanvas();
+    };
+
+    video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("playing", handlePlaying);
+    video.addEventListener("loadedmetadata", handleCanPlay);
+
+    // Set initial canvas size (will be overwritten when video is ready)
+    canvas.width = 320;
+    canvas.height = 240;
+
+    // Start playback
+    playVideo();
+
+    // Start render loop
     render();
 
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = undefined;
       }
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("loadeddata", handleLoadedData);
+      video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("playing", handlePlaying);
+      video.removeEventListener("loadedmetadata", handleCanPlay);
     };
   }, [stream, muted, isLocal]);
 
   return (
     <div className={`relative overflow-hidden rounded-lg bg-black ${className}`}>
-      {/* Hidden video element - needs dimensions for canvas to reference */}
+      {/* Hidden video element */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={muted || isLocal}
-        className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-        style={{ objectFit: "cover" }}
+        className="absolute opacity-0 pointer-events-none"
+        style={{ width: 1, height: 1 }}
       />
 
       {/* Canvas with confessional effect - styled to fill container */}
@@ -220,8 +256,8 @@ export function ConfessionalVideo({
         </div>
       )}
 
-      {/* Loading state - show when stream exists but not playing or no video dimensions yet */}
-      {stream && (!isPlaying || !hasVideo) && (
+      {/* Loading state - show only briefly when stream exists but video not ready */}
+      {stream && !isVideoReady && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
         </div>

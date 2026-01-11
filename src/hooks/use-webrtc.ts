@@ -275,16 +275,39 @@ export function useWebRTC({
         };
 
         pc.ontrack = (event) => {
+          console.log("[WebRTC] ontrack fired:", {
+            track: event.track?.kind,
+            streams: event.streams?.length,
+            streamId: event.streams?.[0]?.id,
+          });
+
           // Create a new MediaStream if we don't have one yet, or add tracks to existing
           if (event.streams && event.streams[0]) {
             const remoteStr = event.streams[0];
+            console.log("[WebRTC] Setting remote stream from event.streams[0]:", {
+              id: remoteStr.id,
+              videoTracks: remoteStr.getVideoTracks().length,
+              audioTracks: remoteStr.getAudioTracks().length,
+              active: remoteStr.active,
+            });
             setRemoteStream(remoteStr);
             onRemoteStreamRef.current?.(remoteStr);
           } else if (event.track) {
             // Fallback: create stream from individual track
+            console.log("[WebRTC] Creating stream from individual track");
             setRemoteStream((prev) => {
               const stream = prev || new MediaStream();
-              stream.addTrack(event.track);
+              // Check if track is already in the stream
+              const existingTrack = stream.getTracks().find(t => t.id === event.track.id);
+              if (!existingTrack) {
+                stream.addTrack(event.track);
+              }
+              console.log("[WebRTC] Stream after adding track:", {
+                id: stream.id,
+                videoTracks: stream.getVideoTracks().length,
+                audioTracks: stream.getAudioTracks().length,
+                active: stream.active,
+              });
               onRemoteStreamRef.current?.(stream);
               return stream;
             });
