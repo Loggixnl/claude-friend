@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { safeError } from "@/lib/security";
+import { useEffect, useRef, useState } from "react";
 
 interface ConfessionalVideoProps {
   stream: MediaStream | null;
@@ -88,9 +87,11 @@ export function ConfessionalVideo({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
+  const streamIdRef = useRef<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
-  const startRendering = useCallback(() => {
+  // Handle stream changes
+  useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -98,42 +99,15 @@ export function ConfessionalVideo({
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
-    const render = () => {
-      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
-        // Update canvas size to match video
-        const scale = 0.5;
-        const targetWidth = Math.floor(video.videoWidth * scale);
-        const targetHeight = Math.floor(video.videoHeight * scale);
-
-        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-          console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] Canvas resized to ${targetWidth}x${targetHeight}`);
-        }
-
-        applyConfessionalEffect(ctx, video, canvas);
-
-        if (!isReady) {
-          setIsReady(true);
-        }
-      }
-      animationRef.current = requestAnimationFrame(render);
-    };
-
-    // Cancel any existing animation
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
+    // Check if this is the same stream
+    const newStreamId = stream?.id || null;
+    if (newStreamId === streamIdRef.current && stream) {
+      // Same stream, don't reset
+      return;
     }
+    streamIdRef.current = newStreamId;
 
-    render();
-  }, [isLocal, isReady]);
-
-  // Handle stream changes
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] useEffect triggered, stream:`, stream ? {
+    console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] Stream changed:`, stream ? {
       id: stream.id,
       active: stream.active,
       videoTracks: stream.getVideoTracks().length,
@@ -151,6 +125,8 @@ export function ConfessionalVideo({
 
     if (!stream) {
       video.srcObject = null;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       return;
     }
 
@@ -158,44 +134,53 @@ export function ConfessionalVideo({
     video.srcObject = stream;
     video.muted = muted || isLocal;
 
-    const handleLoadedMetadata = () => {
-      console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] loadedmetadata: ${video.videoWidth}x${video.videoHeight}`);
-      startRendering();
+    // Render function
+    const render = () => {
+      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+        // Update canvas size to match video
+        const scale = 0.5;
+        const targetWidth = Math.floor(video.videoWidth * scale);
+        const targetHeight = Math.floor(video.videoHeight * scale);
+
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+        }
+
+        applyConfessionalEffect(ctx, video, canvas);
+        setIsReady(true);
+      }
+      animationRef.current = requestAnimationFrame(render);
     };
 
-    const handleCanPlay = () => {
-      console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] canplay event`);
-      startRendering();
+    // Start rendering when video is ready
+    const startRender = () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      render();
     };
 
-    const handlePlay = () => {
-      console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] play event, dimensions: ${video.videoWidth}x${video.videoHeight}`);
-      startRendering();
-    };
+    video.addEventListener("loadedmetadata", startRender);
+    video.addEventListener("canplay", startRender);
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("canplay", handleCanPlay);
-    video.addEventListener("play", handlePlay);
-
-    // Try to play immediately
-    video.play().then(() => {
-      console.log(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] play() succeeded`);
-      startRendering();
-    }).catch((err) => {
-      console.error(`[ConfessionalVideo ${isLocal ? "LOCAL" : "REMOTE"}] play() failed:`, err);
-      safeError("Video play failed:", err);
+    // Try to play
+    video.play().catch(() => {
+      // Ignore play errors - autoplay might handle it
     });
 
+    // Start render loop immediately (will wait for video data in the loop)
+    startRender();
+
     return () => {
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("canplay", handleCanPlay);
-      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("loadedmetadata", startRender);
+      video.removeEventListener("canplay", startRender);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
     };
-  }, [stream, muted, isLocal, startRendering]);
+  }, [stream, muted, isLocal]);
 
   return (
     <div className={`relative overflow-hidden rounded-lg bg-black ${className}`}>
