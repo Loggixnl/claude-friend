@@ -45,7 +45,7 @@ export const callRequestSchema = z.object({
   listenerId: z.string().uuid("Invalid listener ID"),
   description: z
     .string()
-    .min(100, "Description must be at least 100 characters")
+    .min(50, "Description must be at least 50 characters")
     .max(2000, "Description must be at most 2000 characters"),
 });
 

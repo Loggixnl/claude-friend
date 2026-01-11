@@ -275,9 +275,20 @@ export function useWebRTC({
         };
 
         pc.ontrack = (event) => {
-          const remoteStr = event.streams[0];
-          setRemoteStream(remoteStr);
-          onRemoteStreamRef.current?.(remoteStr);
+          // Create a new MediaStream if we don't have one yet, or add tracks to existing
+          if (event.streams && event.streams[0]) {
+            const remoteStr = event.streams[0];
+            setRemoteStream(remoteStr);
+            onRemoteStreamRef.current?.(remoteStr);
+          } else if (event.track) {
+            // Fallback: create stream from individual track
+            setRemoteStream((prev) => {
+              const stream = prev || new MediaStream();
+              stream.addTrack(event.track);
+              onRemoteStreamRef.current?.(stream);
+              return stream;
+            });
+          }
         };
 
         pc.onconnectionstatechange = () => {
