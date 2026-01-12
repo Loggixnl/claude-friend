@@ -53,16 +53,17 @@ export function useWebRTC({
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
 
-  // Use refs to avoid stale closures and prevent re-renders
+  // Use refs for mutable state that shouldn't trigger re-renders
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
-  const isInitializedRef = useRef(false);
   const isCleanedUpRef = useRef(false);
   const otherReadyRef = useRef(false);
+  const hasCreatedOfferRef = useRef(false);
 
-  // Store callbacks in refs to avoid dependency issues
+  // Store callbacks in refs
   const onErrorRef = useRef(onError);
   const onHangupRef = useRef(onHangup);
   const onConnectionStateChangeRef = useRef(onConnectionStateChange);
@@ -76,6 +77,7 @@ export function useWebRTC({
   }, [onError, onHangup, onConnectionStateChange, onRemoteStream]);
 
   const hangup = useCallback(async () => {
+    console.log("[WebRTC] hangup called, isCleanedUp:", isCleanedUpRef.current);
     if (isCleanedUpRef.current) return;
     isCleanedUpRef.current = true;
 
@@ -125,27 +127,44 @@ export function useWebRTC({
   }, []);
 
   useEffect(() => {
-    // Prevent double initialization in strict mode
-    if (isInitializedRef.current) return;
-    isInitializedRef.current = true;
+    console.log("[WebRTC] useEffect starting, requestId:", requestId, "userId:", userId, "isTalker:", isTalker);
+
+    // Reset all refs for fresh start
     isCleanedUpRef.current = false;
+    otherReadyRef.current = false;
+    hasCreatedOfferRef.current = false;
+    iceCandidatesQueue.current = [];
+    remoteStreamRef.current = null;
 
     const supabase = createClient();
     const channelName = `call:${requestId}`;
 
-    const createOffer = async (pc: RTCPeerConnection) => {
+    let pc: RTCPeerConnection | null = null;
+
+    const createOffer = async () => {
+      if (!pc || pc.signalingState === "closed" || hasCreatedOfferRef.current) {
+        console.log("[WebRTC] Skipping createOffer - pc:", !!pc, "signalingState:", pc?.signalingState, "hasCreatedOffer:", hasCreatedOfferRef.current);
+        return;
+      }
+
+      hasCreatedOfferRef.current = true;
+      console.log("[WebRTC] Creating offer...");
+
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         const timestamp = Date.now();
         const signature = generateSignalSignature(userId, requestId, timestamp);
+
+        console.log("[WebRTC] Sending offer via channel");
         channelRef.current?.send({
           type: "broadcast",
           event: "webrtc_signal",
           payload: { type: "offer", sdp: offer, from: userId, timestamp, signature },
         });
       } catch (error) {
-        safeError("Error creating offer:", error);
+        console.error("[WebRTC] Error creating offer:", error);
+        hasCreatedOfferRef.current = false; // Allow retry
         onErrorRef.current?.(error as Error);
       }
     };
@@ -158,7 +177,12 @@ export function useWebRTC({
       timestamp?: number;
       signature?: string;
     }) => {
-      if (data.from === userId || isCleanedUpRef.current) return;
+      console.log("[WebRTC] handleSignal:", data.type, "from:", data.from, "isCleanedUp:", isCleanedUpRef.current);
+
+      if (data.from === userId || isCleanedUpRef.current) {
+        console.log("[WebRTC] Ignoring signal - same user or cleaned up");
+        return;
+      }
 
       // Verify signature for offer/answer/ice_candidate messages
       if (
@@ -168,22 +192,25 @@ export function useWebRTC({
         data.signature
       ) {
         if (!verifySignalSignature(data.from, requestId, data.timestamp, data.signature)) {
-          safeError("Invalid signal signature, ignoring message");
+          console.error("[WebRTC] Invalid signal signature, ignoring message");
           return;
         }
       }
 
-      const pc = peerConnectionRef.current;
-
       try {
         if (data.type === "ready") {
+          console.log("[WebRTC] Other party ready, isTalker:", isTalker);
           otherReadyRef.current = true;
-          // If we're talker and have a connection, create offer
-          if (isTalker && pc && pc.signalingState !== "closed") {
-            await createOffer(pc);
+          // If we're talker, create offer
+          if (isTalker && pc && pc.signalingState === "stable") {
+            await createOffer();
           }
-        } else if (data.type === "offer" && pc && pc.signalingState !== "closed") {
+        } else if (data.type === "offer" && pc) {
+          console.log("[WebRTC] Received offer, signalingState:", pc.signalingState);
+          if (pc.signalingState === "closed") return;
+
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp!));
+          console.log("[WebRTC] Set remote description (offer), processing", iceCandidatesQueue.current.length, "queued candidates");
 
           // Process queued candidates
           for (const candidate of iceCandidatesQueue.current) {
@@ -195,13 +222,19 @@ export function useWebRTC({
           await pc.setLocalDescription(answer);
           const answerTimestamp = Date.now();
           const answerSignature = generateSignalSignature(userId, requestId, answerTimestamp);
+
+          console.log("[WebRTC] Sending answer");
           channelRef.current?.send({
             type: "broadcast",
             event: "webrtc_signal",
             payload: { type: "answer", sdp: answer, from: userId, timestamp: answerTimestamp, signature: answerSignature },
           });
-        } else if (data.type === "answer" && pc && pc.signalingState !== "closed") {
+        } else if (data.type === "answer" && pc) {
+          console.log("[WebRTC] Received answer, signalingState:", pc.signalingState);
+          if (pc.signalingState === "closed") return;
+
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp!));
+          console.log("[WebRTC] Set remote description (answer), processing", iceCandidatesQueue.current.length, "queued candidates");
 
           // Process queued candidates
           for (const candidate of iceCandidatesQueue.current) {
@@ -209,15 +242,17 @@ export function useWebRTC({
           }
           iceCandidatesQueue.current = [];
         } else if (data.type === "ice_candidate" && data.candidate) {
+          console.log("[WebRTC] Received ICE candidate");
           if (pc && pc.remoteDescription && pc.signalingState !== "closed") {
             await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
           } else {
+            console.log("[WebRTC] Queueing ICE candidate (no remote description yet)");
             iceCandidatesQueue.current.push(data.candidate);
           }
         } else if (data.type === "hangup") {
-          // Other party hung up
+          console.log("[WebRTC] Received hangup from other party");
           localStreamRef.current?.getTracks().forEach((track) => track.stop());
-          peerConnectionRef.current?.close();
+          pc?.close();
           setLocalStream(null);
           setRemoteStream(null);
           setConnectionState("closed");
@@ -225,35 +260,39 @@ export function useWebRTC({
           onHangupRef.current?.();
         }
       } catch (error) {
-        safeError("Signal handling error:", error);
+        console.error("[WebRTC] Signal handling error:", error);
         onErrorRef.current?.(error as Error);
       }
     };
 
     const setup = async () => {
       try {
-        // Get media first
+        console.log("[WebRTC] Getting user media...");
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 480 }, height: { ideal: 360 }, facingMode: "user" },
           audio: true,
         });
 
         if (isCleanedUpRef.current) {
+          console.log("[WebRTC] Cleaned up during getUserMedia, stopping tracks");
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
 
+        console.log("[WebRTC] Got local stream:", stream.id);
         localStreamRef.current = stream;
         setLocalStream(stream);
         setIsMediaReady(true);
 
         // Create peer connection
-        const pc = new RTCPeerConnection(ICE_SERVERS);
+        pc = new RTCPeerConnection(ICE_SERVERS);
         peerConnectionRef.current = pc;
+        console.log("[WebRTC] Created RTCPeerConnection");
 
-        // Add tracks
+        // Add tracks to peer connection
         stream.getTracks().forEach((track) => {
-          pc.addTrack(track, stream);
+          console.log("[WebRTC] Adding track to PC:", track.kind);
+          pc!.addTrack(track, stream);
         });
 
         pc.onicecandidate = (event) => {
@@ -275,59 +314,78 @@ export function useWebRTC({
         };
 
         pc.ontrack = (event) => {
-          console.log("[WebRTC] ontrack fired:", {
-            track: event.track?.kind,
-            streams: event.streams?.length,
-            streamId: event.streams?.[0]?.id,
+          console.log("[WebRTC] >>> ontrack event <<<", {
+            trackKind: event.track?.kind,
+            trackId: event.track?.id,
+            trackEnabled: event.track?.enabled,
+            trackReadyState: event.track?.readyState,
+            streamsCount: event.streams?.length,
+            firstStreamId: event.streams?.[0]?.id,
           });
 
-          // Create a new MediaStream if we don't have one yet, or add tracks to existing
+          let streamToUse: MediaStream;
+
           if (event.streams && event.streams[0]) {
-            const remoteStr = event.streams[0];
-            console.log("[WebRTC] Setting remote stream from event.streams[0]:", {
-              id: remoteStr.id,
-              videoTracks: remoteStr.getVideoTracks().length,
-              audioTracks: remoteStr.getAudioTracks().length,
-              active: remoteStr.active,
-            });
-            setRemoteStream(remoteStr);
-            onRemoteStreamRef.current?.(remoteStr);
-          } else if (event.track) {
-            // Fallback: create stream from individual track
-            console.log("[WebRTC] Creating stream from individual track");
-            setRemoteStream((prev) => {
-              const stream = prev || new MediaStream();
-              // Check if track is already in the stream
-              const existingTrack = stream.getTracks().find(t => t.id === event.track.id);
-              if (!existingTrack) {
-                stream.addTrack(event.track);
-              }
-              console.log("[WebRTC] Stream after adding track:", {
-                id: stream.id,
-                videoTracks: stream.getVideoTracks().length,
-                audioTracks: stream.getAudioTracks().length,
-                active: stream.active,
-              });
-              onRemoteStreamRef.current?.(stream);
-              return stream;
-            });
+            streamToUse = event.streams[0];
+            console.log("[WebRTC] Using stream from event.streams[0]");
+          } else {
+            // Fallback: create or use existing stream
+            if (!remoteStreamRef.current) {
+              remoteStreamRef.current = new MediaStream();
+              console.log("[WebRTC] Created new MediaStream for remote");
+            }
+            streamToUse = remoteStreamRef.current;
+
+            // Add track if not already present
+            const existingTrack = streamToUse.getTracks().find(t => t.id === event.track.id);
+            if (!existingTrack) {
+              streamToUse.addTrack(event.track);
+              console.log("[WebRTC] Added track to remote stream");
+            }
           }
+
+          remoteStreamRef.current = streamToUse;
+
+          console.log("[WebRTC] Setting remoteStream state:", {
+            id: streamToUse.id,
+            active: streamToUse.active,
+            videoTracks: streamToUse.getVideoTracks().length,
+            audioTracks: streamToUse.getAudioTracks().length,
+            videoTrackStates: streamToUse.getVideoTracks().map(t => ({ id: t.id, enabled: t.enabled, readyState: t.readyState })),
+          });
+
+          setRemoteStream(streamToUse);
+          onRemoteStreamRef.current?.(streamToUse);
         };
 
         pc.onconnectionstatechange = () => {
-          setConnectionState(pc.connectionState);
-          onConnectionStateChangeRef.current?.(pc.connectionState);
+          console.log("[WebRTC] Connection state changed:", pc?.connectionState);
+          if (pc) {
+            setConnectionState(pc.connectionState);
+            onConnectionStateChangeRef.current?.(pc.connectionState);
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          console.log("[WebRTC] ICE connection state:", pc?.iceConnectionState);
+        };
+
+        pc.onsignalingstatechange = () => {
+          console.log("[WebRTC] Signaling state:", pc?.signalingState);
         };
 
         // Subscribe to channel
+        console.log("[WebRTC] Subscribing to channel:", channelName);
         channelRef.current = supabase
           .channel(channelName)
           .on("broadcast", { event: "webrtc_signal" }, ({ payload }) => {
             handleSignal(payload);
           })
           .subscribe((status) => {
+            console.log("[WebRTC] Channel subscription status:", status);
             if (status === "SUBSCRIBED" && !isCleanedUpRef.current) {
               // Signal ready
+              console.log("[WebRTC] Sending ready signal");
               channelRef.current?.send({
                 type: "broadcast",
                 event: "webrtc_signal",
@@ -336,13 +394,14 @@ export function useWebRTC({
 
               // If talker and other is ready, start
               if (isTalker && otherReadyRef.current) {
-                createOffer(pc);
+                console.log("[WebRTC] Other was already ready, creating offer");
+                createOffer();
               }
             }
           });
 
       } catch (error) {
-        safeError("Setup error:", error);
+        console.error("[WebRTC] Setup error:", error);
         onErrorRef.current?.(error as Error);
       }
     };
@@ -350,7 +409,7 @@ export function useWebRTC({
     setup();
 
     return () => {
-      // Only cleanup if actually initialized
+      console.log("[WebRTC] Cleanup running");
       if (!isCleanedUpRef.current) {
         isCleanedUpRef.current = true;
         localStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -359,8 +418,6 @@ export function useWebRTC({
           supabase.removeChannel(channelRef.current);
         }
       }
-      // Reset for potential re-mount
-      isInitializedRef.current = false;
     };
   }, [requestId, userId, isTalker]);
 
